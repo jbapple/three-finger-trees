@@ -3,14 +3,14 @@ import Data.Sequence as S
 type Deque = S.Seq
 
 data Digit a = D1 a
-           | D2 a a
-           | D3 a a a
-           | D4 a a a a deriving (Show)
-
+             | D2 a a
+             | D3 a a a
+             | D4 a a a a deriving (Show)
+               
 data Rest a = R0
-          | R1 a
-          | R2 a a
-          | R3 a a a deriving (Show)
+            | R1 a
+            | R2 a a
+            | R3 a a a deriving (Show)
 
 data LSpine a = LSpine (Deque (Rest (RSpine a, Digit a))) deriving (Show)
 data RSpine a = RSpine (Deque (Rest (LSpine a, Digit a))) deriving (Show)
