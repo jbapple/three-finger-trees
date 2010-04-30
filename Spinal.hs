@@ -37,6 +37,10 @@ lsplit x@(LConc d (LSpine xs)) =
             R2 (zs1,v1) (zs2,v2) -> (LConc d (LSpine (ys S.|> (R1 (zs1,v1)))), RConc zs2 v2)
             R3 (zs1,v1) (zs2,v2) (zs3,v3)-> (LConc d (LSpine (ys S.|> (R2 (zs1,v1) (zs2,v2)))), RConc zs3 v3)
 
+approxSplitSameType x =
+    let (a,b) = lsplit x
+    in (a, toLConc b)
+
 lcons :: a -> LConc a -> LConc a
 lcons x LEmpty = LConc ({-D1-} x) (LSpine S.empty)
 lcons x xs@(LConc d r) =
@@ -81,6 +85,7 @@ toLspine (RSpine xs,d) =
             R2 (v1,LSpine x1) xv2 ->  (v1,LSpine (x1 S.|> (R1 (RSpine ((R1 xv2) S.<| ys), d))))
             R3 (v1,LSpine x1) xv2 xv3 ->  (v1,LSpine (x1 S.|> (R1 (RSpine ((R2 xv2 xv3) S.<| ys), d))))
 
+toLConc REmpty = LEmpty
 toLConc (RConc a b) =
     let (c,d) = toLspine (a,b)
     in LConc c d
