@@ -1,4 +1,5 @@
-import Data.Sequence as S
+import qualified Data.Sequence as S
+import qualified Data.List as L
 
 type Deque = S.Seq
 
@@ -72,3 +73,59 @@ toLspine (RSpine xs,d) =
             R1 (LSpine x1,v1) ->  (LSpine ((R1 (RSpine ys, d)) S.<| x1),v1)
             R2 (LSpine x1,v1) xv2 ->  (LSpine ((R1 (RSpine ((R1 xv2) S.<| ys), d)) S.<| x1),v1)
             R3 (LSpine x1,v1) xv2 xv3 ->  (LSpine ((R1 (RSpine ((R2 xv2 xv3) S.<| ys), d)) S.<| x1),v1)
+
+toList :: LConc a -> [a]
+toList LEmpty = []
+toList (LConc d xs) = toListDigit' d (toListLspine xs)
+
+toListDigit' (D1 p) xs = p:xs
+toListDigit' (D2 p q) xs = p:q:xs
+toListDigit' (D3 p q r) xs = p:q:r:xs
+toListDigit' (D4 p q r s) xs = p:q:r:s:xs
+
+toListLspine (LSpine xs) =
+    let extract (r,d) = (toListRspine r) ++ (toListDigit' d [])
+        restExtract = restConcatMap extract
+        ys = concatMap restExtract $ stoList xs
+    in ys
+
+toListRspine (RSpine xs) =
+    let extract (l,d) = toListDigit' d (toListLspine l)
+        restExtract = restConcatMap extract
+        ys = concatMap restExtract $ stoList xs
+    in ys
+
+restConcatMap _ R0 = []
+restConcatMap f (R1 x) = f x
+restConcatMap f (R2 x y) = f x ++ f y
+restConcatMap f (R3 x y z) = f x ++ f y ++ f z
+        
+stoList xs =
+    case S.viewl xs of
+      S.EmptyL -> []
+      y S.:< ys -> y:(stoList ys)
+
+fromList [] = LEmpty
+fromList (x:xs) = lcons x (fromList xs)
+
+{-
+(\x -> [1..x] == (toList $ fromList [1..x])) 68
+-}
+
+bug1 = LConc (D4 1 2 3 4) 
+           (LSpine (S.fromList [R3 (RSpine (S.fromList []),D3 5 6 7) 
+                                (RSpine (S.fromList []),D3 8 9 10) 
+                                (RSpine (S.fromList []),D3 11 12 13),
+                                R3 (RSpine (S.fromList [R1 (LSpine (S.fromList []),
+                                                            D3 14 15 16)]),
+                                    D3 17 18 19) 
+                                       (RSpine (S.fromList [R1 (LSpine (S.fromList []),D3 20 21 22)]),
+                                               D3 23 24 25) 
+                                       (RSpine (S.fromList [R1 (LSpine (S.fromList []),D3 26 27 28)]),D3 29 30 31),
+                                R3 (RSpine (S.fromList [R1 (LSpine (S.fromList [R1 (RSpine (S.fromList []),D3 35 36 37)]),D3 32 33 34),
+                                                           R1 (LSpine (S.fromList []),D3 38 39 40)]),D3 41 42 43) 
+                                       (RSpine (S.fromList [R1 (LSpine (S.fromList [R1 (RSpine (S.fromList []),D3 47 48 49)]),D3 44 45 46),
+                                                               R1 (LSpine (S.fromList []),D3 50 51 52)]),D3 53 54 55) 
+                                       (RSpine (S.fromList [R1 (LSpine (S.fromList [R1 (RSpine (S.fromList []),D3 59 60 61)]),D3 56 57 58),
+                                                               R1 (LSpine (S.fromList []),D3 62 63 64)]),D3 65 66 67)]))
+
