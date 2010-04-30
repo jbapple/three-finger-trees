@@ -14,12 +14,12 @@ data Rest a = R0
             | R3 a a a deriving (Show)
 
 data LSpine a = LSpine (Deque (Rest (RSpine a, Digit a))) deriving (Show)
-data RSpine a = RSpine (Deque (Rest (LSpine a, Digit a))) deriving (Show)
+data RSpine a = RSpine (Deque (Rest (Digit a, LSpine a))) deriving (Show)
 
 data LConc a = LEmpty
              | LConc (Digit a) (LSpine a) deriving (Show)
 data RConc a = REmpty
-             | RConc (Digit a) (RSpine a) deriving (Show)
+             | RConc (RSpine a) (Digit a) deriving (Show)
 
 lsplit :: LConc a -> (LConc a, RConc a)
 lsplit LEmpty = (LEmpty, REmpty)
@@ -29,9 +29,9 @@ lsplit x@(LConc d (LSpine xs)) =
       ys S.:> y ->
           case y of
             R0 -> lsplit (LConc d (LSpine ys))
-            R1 (zs,v) -> (LConc d (LSpine ys), RConc v zs)
-            R2 (zs1,v1) (zs2,v2) -> (LConc d (LSpine (ys S.|> (R1 (zs1,v1)))), RConc v2 zs2)
-            R3 (zs1,v1) (zs2,v2) (zs3,v3)-> (LConc d (LSpine (ys S.|> (R2 (zs1,v1) (zs2,v2)))), RConc v3 zs3)
+            R1 (zs,v) -> (LConc d (LSpine ys), RConc zs v)
+            R2 (zs1,v1) (zs2,v2) -> (LConc d (LSpine (ys S.|> (R1 (zs1,v1)))), RConc zs2 v2)
+            R3 (zs1,v1) (zs2,v2) (zs3,v3)-> (LConc d (LSpine (ys S.|> (R2 (zs1,v1) (zs2,v2)))), RConc zs3 v3)
 
 lcons :: a -> LConc a -> LConc a
 lcons x LEmpty = LConc (D1 x) (LSpine S.empty)
@@ -63,16 +63,16 @@ bothRs x (RSpine ys, d) =
     let z = toLspine x
     in (RSpine ((R1 z) S.<| ys),d)
 
-toLspine :: (RSpine a,Digit a) -> (LSpine a,Digit a)
+toLspine :: (RSpine a,Digit a) -> (Digit a,LSpine a)
 toLspine (RSpine xs,d) =
     case S.viewl xs of
-      S.EmptyL -> (LSpine S.empty,d)
+      S.EmptyL -> (d,LSpine S.empty)
       y S.:< ys ->
           case y of
             R0 -> toLspine (RSpine ys,d)
-            R1 (LSpine x1,v1) ->  (LSpine ((R1 (RSpine ys, d)) S.<| x1),v1)
-            R2 (LSpine x1,v1) xv2 ->  (LSpine ((R1 (RSpine ((R1 xv2) S.<| ys), d)) S.<| x1),v1)
-            R3 (LSpine x1,v1) xv2 xv3 ->  (LSpine ((R1 (RSpine ((R2 xv2 xv3) S.<| ys), d)) S.<| x1),v1)
+            R1 (v1,LSpine x1) ->  (v1,LSpine (x1 S.|> (R1 (RSpine ys, d))))
+            R2 (v1,LSpine x1) xv2 ->  (v1,LSpine (x1 S.|> (R1 (RSpine ((R1 xv2) S.<| ys), d))))
+            R3 (v1,LSpine x1) xv2 xv3 ->  (v1,LSpine (x1 S.|> (R1 (RSpine ((R2 xv2 xv3) S.<| ys), d))))
 
 toList :: LConc a -> [a]
 toList LEmpty = []
@@ -90,7 +90,7 @@ toListLspine (LSpine xs) =
     in ys
 
 toListRspine (RSpine xs) =
-    let extract (l,d) = toListDigit' d (toListLspine l)
+    let extract (d,l) = toListDigit' d (toListLspine l)
         restExtract = restConcatMap extract
         ys = concatMap restExtract $ stoList xs
     in ys
@@ -111,8 +111,8 @@ fromList (x:xs) = lcons x (fromList xs)
 {-
 (\x -> [1..x] == (toList $ fromList [1..x])) 68
 -}
-
-bug1 = LConc (D4 1 2 3 4) 
+{-
+bug1_67 = LConc (D4 1 2 3 4) 
            (LSpine (S.fromList [R3 (RSpine (S.fromList []),D3 5 6 7) 
                                 (RSpine (S.fromList []),D3 8 9 10) 
                                 (RSpine (S.fromList []),D3 11 12 13),
@@ -128,4 +128,9 @@ bug1 = LConc (D4 1 2 3 4)
                                                                R1 (LSpine (S.fromList []),D3 50 51 52)]),D3 53 54 55) 
                                        (RSpine (S.fromList [R1 (LSpine (S.fromList [R1 (RSpine (S.fromList []),D3 59 60 61)]),D3 56 57 58),
                                                                R1 (LSpine (S.fromList []),D3 62 63 64)]),D3 65 66 67)]))
+-}
+{-
+bug1_66 = LConc (D3 1 2 3) (LSpine (fromList [R3 (RSpine (fromList []),D3 4 5 6) (RSpine (fromList []),D3 7 8 9) (RSpine (fromList []),D3 10 11 12),R3 (RSpine (fromList [R1 (LSpine (fromList []),D3 13 14 15)]),D3 16 17 18) (RSpine (fromList [R1 (LSpine (fromList []),D3 19 20 21)]),D3 22 23 24) (RSpine (fromList [R1 (LSpine (fromList []),D3 25 26 27)]),D3 28 29 30),R3 (RSpine (fromList [R1 (LSpine (fromList [R1 (RSpine (fromList []),D3 34 35 36)]),D3 31 32 33),R1 (LSpine (fromList []),D3 37 38 39)]),D3 40 41 42) (RSpine (fromList [R1 (LSpine (fromList [R1 (RSpine (fromList []),D3 46 47 48)]),D3 43 44 45),R1 (LSpine (fromList []),D3 49 50 51)]),D3 52 53 54) (RSpine (fromList [R1 (LSpine (fromList [R1 (RSpine (fromList []),D3 58 59 60)]),D3 55 56 57),R1 (LSpine (fromList []),D3 61 62 63)]),D3 64 65 66)]))
+-}
 
+bug1 = and [[1..i] == (toList $ fromList [1..i]) | i <- [1..68]]
