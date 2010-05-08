@@ -9,6 +9,8 @@ data Rest a = R0
             | R2 a a
             | R3 a a a deriving (Show)
 
+-- TODO: is R3 necessary?
+
 data LSpine a = LSpine (Deque (Rest (RSpine a, a))) deriving (Show)
 data RSpine a = RSpine (Deque (Rest (a, LSpine a))) deriving (Show)
 
@@ -142,7 +144,7 @@ sizeDiff x =
        then 
            (small t || sizeDiff p) && 
            (small u || sizeDiff q)
-       else error (show (t,u))
+       else error (show (t,u,p,q,x))
 
 mtoList = L.unfoldr ltail
 
@@ -241,3 +243,7 @@ alltails f xs = f xs &&
       Just (_,ys) -> alltails f ys
 
 bug2 = test8 5
+
+test9 n = and [alltails sizeDiff (fromList [1..i]) | i <- [1..n]] 
+
+bug3 = test9 50
