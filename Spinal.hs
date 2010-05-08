@@ -45,7 +45,7 @@ lsconc (LSpine xs) =
           case y of
             R0 -> lsconc (LSpine ys)
             R1 (ps,p) -> let (q,LSpine qs) = toLspine (ps,p)
-                         in LConc q (LSpine (qs S.>< ys))
+                         in LConc q (LSpine ((qs S.|> R0) S.>< ys))
             R2 (ps,p) qsq -> let (q,LSpine qs) = toLspine (ps,p)
                              in LConc q (LSpine ((qs S.|> (R1 qsq)) S.>< ys))
             R3 (ps,p) qsq rsr -> let (q,LSpine qs) = toLspine (ps,p)
@@ -120,6 +120,7 @@ fromList [] = LEmpty
 fromList (x:xs) = lcons x (fromList xs)
 
 bug1 n = and [[1..i] == (toList $ fromList [1..i]) | i <- [1..(max 68 n)]]
+test1 = bug1
 test2 n = and [(splitToList $ fromList [1..i]) | i <- [1..(max 68 n)]]
 splitToList x =
     let (p,q) = lsplit x
