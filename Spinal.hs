@@ -35,7 +35,7 @@ lsplit x@(LConc d (LSpine xs)) =
             R0 -> lsplit (LConc d (LSpine ys))
             R1 (zs,v) -> (LConc d (LSpine ys), RConc zs v)
             R2 (zs1,v1) (zs2,v2) -> (LConc d (LSpine (ys S.|> (R1 (zs1,v1)))), RConc zs2 v2)
-            R3 (zs1,v1) (zs2,v2) (zs3,v3)-> (LConc d (LSpine (ys S.|> (R2 (zs1,v1) (zs2,v2)))), RConc zs3 v3)
+            R3 (zs1,v1) (zs2,v2) (RSpine zs3,v3)-> (LConc d (LSpine (ys S.|> (R1 (zs1,v1)))), RConc (RSpine ((R1 (toLspine (zs2,v2))) S.<| zs3)) v3)
 
 approxSplitSameType x =
     let (a,b) = lsplit x
@@ -153,3 +153,20 @@ bug1_66 = LConc (D3 1 2 3) (LSpine (fromList [R3 (RSpine (fromList []),D3 4 5 6)
 -}
 
 bug1 n = and [[1..i] == (toList $ fromList [1..i]) | i <- [1..(max 68 n)]]
+test2 n = and [[1..i] == (splitToList $ fromList [1..i]) | i <- [1..(max 68 n)]]
+    where splitToList x =
+              let (p,q) = lsplit x
+              in toList p ++ (toList $ toLConc q)
+test3 n = and [(sizeDiff $ fromList [1..i]) | i <- [1..n]]
+sizeDiff LEmpty = True
+sizeDiff x =
+    let (p,q') = lsplit x
+        q = toLConc q'
+        (r,s) = (toList p,toList q)
+        (t,u) = (toInteger $ length r, toInteger $ length s)
+        small x = x <= 1
+    in if (t+2)^2 > u && (u+2)^2 > t
+       then 
+           (small t || sizeDiff p) && 
+           (small u || sizeDiff q)
+       else error (show (t,u))
