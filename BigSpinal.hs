@@ -4,21 +4,88 @@ import qualified Monad as M
 
 type Deque = S.Seq
              
-data Rest a = R1 a
-            | R2 a a
-            | R3 a a a 
-            | R4 a a a a deriving (Show)
+data Rest a b = R1 b
+              | R2 a b
+              | R3 a a b 
+              | R4 a a a b deriving (Show)
+
+data Lest a b = L1 a
+              | L2 a b
+              | L3 a b b 
+              | L4 a b b b deriving (Show)
 
 -- TODO: is R4 necessary?
 
-data LSpine a = LSpine (Deque (Rest (RSpine a, a))) deriving (Show)
-data RSpine a = RSpine (Deque (Rest (a, LSpine a))) deriving (Show)
+data LSpine a = LSpine (Deque (Rest (Spine a) (RSpine a, a))) deriving (Show)
+data RSpine a = RSpine (Deque (Lest (a, LSpine a) (Spine a))) deriving (Show)
+type Spine a = Either (a,LSpine a) (RSpine a, a)
+
 
 data LConc a = LEmpty
              | LConc a (LSpine a) deriving (Show)
 data RConc a = REmpty
              | RConc (RSpine a) a deriving (Show)
 
+toLspine :: (RSpine a, a) -> (a,LSpine a)
+toLspine (RSpine xs,d) =
+    case S.viewl xs of
+      S.EmptyL -> (d,LSpine S.empty)
+      y S.:< ys ->
+          case y of
+            L1 (v1,LSpine x1) ->  (v1,LSpine (x1 S.|> (R1 (RSpine ys, d))))
+            L2 (v1,LSpine x1) xv2 ->  (v1,LSpine (x1 S.|> (R2 xv2 (RSpine ys, d))))
+            L3 (v1,LSpine x1) xv2 xv3 ->  (v1,LSpine (x1 S.|> (R3 xv2 xv3 (RSpine ys, d))))
+            L4 (v1,LSpine x1) xv2 xv3 xv4 ->  (v1,LSpine (x1 S.|> (R4 xv2 xv3 xv4 (RSpine ys, d))))
+
+toRspine :: (a,LSpine a) -> (RSpine a,a)
+toRspine (d,LSpine xs) =
+    case S.viewr xs of
+      S.EmptyR -> (RSpine S.empty,d)
+      ys S.:> y ->
+          case y of
+            R1 (RSpine x1,v1) ->  (RSpine ((L1 (d,LSpine ys)) S.<| x1),v1)
+            R2 xv2 (RSpine x1,v1) ->  (RSpine ((L2 (d,LSpine ys) xv2) S.<| x1),v1)
+            R3 xv3 xv2 (RSpine x1,v1) ->  (RSpine ((L3 (d,LSpine ys) xv3 xv2) S.<| x1),v1)
+            R4 xv4 xv3 xv2 (RSpine x1,v1) ->  (RSpine ((L4 (d,LSpine ys) xv4 xv3 xv2) S.<| x1),v1)
+
+forceLspine (Left x) = x
+forceLspine (Right x) = toLspine x
+
+forceRspine (Left x) = toRspine x
+forceRspine (Right x) = x
+
+ldivide :: LConc a -> (LConc a, RConc a)
+ldivide LEmpty = (LEmpty, REmpty)
+ldivide x@(LConc d (LSpine xs)) =
+    case S.viewr xs of
+      S.EmptyR -> (x, REmpty)
+      ys S.:> y ->
+          case y of
+            R1 (zs,v) -> (LConc d (LSpine ys), RConc zs v)
+            R2 zvs3 (RSpine zs4,v4) -> (LConc d (LSpine (ys S.|> (R1 (forceRspine zvs3)))), RConc (RSpine zs4) v4)
+            R3 zvs2 zvs3 (RSpine zs4,v4) -> (LConc d (LSpine (ys S.|> (R1 (forceRspine zvs2)))), RConc (RSpine ((L1 (forceLspine zvs3)) S.<| zs4)) v4)
+            R4 zvs1 zvs2 zvs3 (RSpine zs4,v4) -> (LConc d (LSpine (ys S.|> (R2 zvs1 (forceRspine zvs2)))), RConc (RSpine ((L1 (forceLspine zvs3)) S.<| zs4)) v4)
+{-
+            R3 zvs1 zvs2 (RSpine zs3,v3) -> 
+                case zvs1 of
+                  Right z1 ->
+                      case zvs2 of
+                        Right z2 -> (LConc d (LSpine (ys S.|> (R2 zvs1 z2))), RConc (RSpine zs3) v3)
+                        Left z2 -> (LConc d (LSpine (ys S.|> (R1 z1))), RConc (RSpine ((L1 z2) S.<| zs3)) v3)
+                  Left z1 -> (LConc d (LSpine ys), RConc (RSpine ((L2 z1 zvs2) S.<| zs3)) v3)
+            R3 zvs1 zvs2 zvs3 (RSpine zs4,v4) -> 
+                case zvs1 of
+                  Right z1 ->
+                      case zvs2 of
+                        Right z2 -> 
+                            case zvs3 of
+                              Right z3 -> (LConc d (LSpine (ys S.|> (R3 zvs1 zvs2 z3))), RConc (RSpine zs4) v4)
+                              Left z3 -> (LConc d (LSpine (ys S.|> (R2 zvs1 z2))), RConc (RSpine ((L1 z3) S.<| zs3)) v3)
+                        Left 
+                        Left z2 -> (LConc d (LSpine (ys S.|> (R1 z1))), RConc (RSpine ((L1 z2) S.<| zs3)) v3)
+                  Left z1 -> (LConc d (LSpine ys), RConc (RSpine ((L2 z1 zvs2) S.<| zs3)) v3)
+-}
+{-
 lsplit :: LConc a -> (LConc a, RConc a)
 lsplit LEmpty = (LEmpty, REmpty)
 lsplit x@(LConc d (LSpine xs)) =
@@ -27,9 +94,34 @@ lsplit x@(LConc d (LSpine xs)) =
       ys S.:> y ->
           case y of
             R1 (zs,v) -> (LConc d (LSpine ys), RConc zs v)
-            R2 zvs1 (zs2,v2) -> (LConc d (LSpine (ys S.|> (R1 zvs1))), RConc zs2 v2)
-            R3 zvs1 zvs2 (zs3,v3) -> (LConc d (LSpine (ys S.|> (R2 zvs1 zvs2))), RConc zs3 v3)
+            R2 zvs1 (RSpine zs2,v2) -> 
+                case zvs1 of
+                  Right z1 -> (LConc d (LSpine (ys S.|> (R1 z1))), RConc (RSpine zs2) v2)
+                  Left z1 -> (LConc d (LSpine ys), RConc (RSpine ((L1 z1) S.<| zs2)) v2)
+            R3 zvs1 zvs2 (RSpine zs3,v3) -> 
+                case zvs1 of
+                  Right z1 ->
+                      case zvs2 of
+                        Right z2 -> (LConc d (LSpine (ys S.|> (R2 zvs1 z2))), RConc (RSpine zs3) v3)
+                        Left z2 -> (LConc d (LSpine (ys S.|> (R1 z1))), RConc (RSpine ((L1 z2) S.<| zs3)) v3)
+                  Left z1 -> (LConc d (LSpine ys), RConc (RSpine ((L2 z1 zvs2) S.<| zs3)) v3)
+            R3 zvs1 zvs2 zvs3 (RSpine zs4,v4) -> 
+                case zvs1 of
+                  Right z1 ->
+                      case zvs2 of
+                        Right z2 -> 
+                            case zvs3 of
+                              Right z3 -> (LConc d (LSpine (ys S.|> (R3 zvs1 zvs2 z3))), RConc (RSpine zs4) v4)
+                              Left z3 -> (LConc d (LSpine (ys S.|> (R2 zvs1 z2))), RConc (RSpine ((L1 z3) S.<| zs3)) v3)
+                        Left 
+                        Left z2 -> (LConc d (LSpine (ys S.|> (R1 z1))), RConc (RSpine ((L1 z2) S.<| zs3)) v3)
+                  Left z1 -> (LConc d (LSpine ys), RConc (RSpine ((L2 z1 zvs2) S.<| zs3)) v3)
+-}
+
+{-
+(LConc d (LSpine (ys S.|> (R2 zvs1 zvs2))), RConc zs3 v3)
             R4 zvs1 zvs2 zvs3 (zs4,v4) -> (LConc d (LSpine (ys S.|> (R3 zvs1 zvs2 zvs3))), RConc zs4 v4)
+-}
 
 {-
 approxSplitSameType x =
@@ -37,29 +129,24 @@ approxSplitSameType x =
     in (a, toLConc b)
 -}
 
-toLspine :: (RSpine a, a) -> (a,LSpine a)
-toLspine (RSpine xs,d) =
+
+
+lpush :: Spine a -> LSpine a -> LSpine a -- w -> x -> y : w:a, x:[a,b], y:[a,(b or b+1)]
+lpush x (LSpine xs) =
     case S.viewl xs of
-      S.EmptyL -> (d,LSpine S.empty)
-      y S.:< ys ->
+      S.EmptyL -> LSpine ((R1 (forceRspine x)) S.<| S.empty)
+      y S.:< ys -> 
           case y of
-            R1 (v1,LSpine x1) ->  (v1,LSpine (x1 S.|> (R1 (RSpine ys, d))))
-            R2 (v1,LSpine x1) xv2 ->  (v1,LSpine (x1 S.|> (R2 (toRspine xv2) (RSpine ys, d))))
-            R3 (v1,LSpine x1) xv2 xv3 ->  (v1,LSpine (x1 S.|> (R3 (toRspine xv2) (toRspine xv3) (RSpine ys, d))))
-            R4 (v1,LSpine x1) xv2 xv3 xv4 ->  (v1,LSpine (x1 S.|> (R4 (toRspine xv2) (toRspine xv3) (toRspine xv4) (RSpine ys, d))))
+            R1 c -> LSpine ((R2 x c) S.<| ys)
+            R2 c d -> LSpine ((R3 x c d) S.<| ys)
+            R3 c d e -> LSpine ((R4 x c d e) S.<| ys)
+            R4 c d e (RSpine f,fv) -> 
+                let d' = forceLspine d
+                    c' = forceRspine c
+                    LSpine zs = lpush (Right (RSpine ((L2 d' e) S.<| f),fv)) (LSpine ys)
+                in LSpine ((R2 x c') S.<| zs)
 
-toRspine :: (a,LSpine a) -> (RSpine a,a)
-toRspine (d,LSpine xs) =
-    case S.viewr xs of
-      S.EmptyR -> (RSpine S.empty,d)
-      ys S.:> y ->
-          case y of
-            R1 (RSpine x1,v1) ->  (RSpine ((R1 (d,LSpine ys)) S.<| x1),v1)
-            R2 xv2 (RSpine x1,v1) ->  (RSpine ((R2 (d,LSpine ys) (toLspine xv2)) S.<| x1),v1)
-            R3 xv3 xv2 (RSpine x1,v1) ->  (RSpine ((R3 (d,LSpine ys) (toLspine xv3) (toLspine xv2)) S.<| x1),v1)
-            R4 xv4 xv3 xv2 (RSpine x1,v1) ->  (RSpine ((R4 (d,LSpine ys) (toLspine xv4) (toLspine xv3) (toLspine xv2)) S.<| x1),v1)
-
-lview :: LSpine a -> Maybe ((RSpine a, a),LSpine a) -- w -> ((x,y),z) : w:[a,b+1], x:a, z:[a,(b or b+1)]
+lview :: LSpine a -> Maybe (Spine a,LSpine a) -- w -> ((x,y),z) : w:[a,b+1], x:a, z:[a,(b or b+1)]
 lview (LSpine xs) = -- xs : [a,b+1]
     case S.viewl xs of
       S.EmptyL -> Nothing
@@ -67,18 +154,19 @@ lview (LSpine xs) = -- xs : [a,b+1]
           case y of
             R1 z -> -- z: a
                 case lview (LSpine ys) of
-                  Nothing -> Just (z,LSpine S.empty)
-                  Just ((RSpine q,qv),LSpine qs) -> -- q:a+1 , qs:[a+1,(b+1 or b)]
+                  Nothing -> Just (Right z,LSpine S.empty)
+                  Just (qqv,LSpine qs) -> -- q:a+1 , qs:[a+1,(b+1 or b)]
+                      let (RSpine q,qv) = forceRspine qqv in
                       case S.viewl q of
-                        S.EmptyL -> Just (z, LSpine ((R1 (RSpine q,qv)) S.<| qs))
+                        S.EmptyL -> Just (Right z, LSpine ((R1 (RSpine q,qv)) S.<| qs))
                         r S.:< rs -> -- r:a+1, rs:a
                             case r of -- c,d,e,f: a
-                              R1 c -> Just (z, LSpine ((R2 (toRspine c) (RSpine rs, qv)) S.<| qs))
-                              R2 c d -> Just (z, LSpine ((R3 (toRspine c) (toRspine d) (RSpine rs, qv)) S.<| qs))
-                              R3 c d e -> Just (z, LSpine ((R4 (toRspine c) (toRspine d) (toRspine e) (RSpine rs, qv)) S.<| qs))
-                              R4 c d e f -> 
-                                  let LSpine zs = lpush (RSpine ((R2 e f) S.<| rs),qv) (LSpine qs)
-                                  in Just (z, LSpine ((R2 (toRspine c) (toRspine d)) S.<| zs))
+                              L1 c -> Just (Right z, LSpine ((R2 (Left c) (RSpine rs, qv)) S.<| qs))
+                              L2 c d -> Just (Right z, LSpine ((R3 (Left c) d (RSpine rs, qv)) S.<| qs))
+                              L3 c d e -> Just (Right z, LSpine ((R4 (Left c) d e (RSpine rs, qv)) S.<| qs))
+                              L4 c d e f -> 
+                                  let LSpine zs = lpush (Right (RSpine ((L2 (forceLspine e) f) S.<| rs),qv)) (LSpine qs)
+                                  in Just (Right z, LSpine ((R2 (Left c) (forceRspine d)) S.<| zs))
             R2 b c -> Just (b, LSpine ((R1 c) S.<| ys))
             R3 b c d -> Just (b, LSpine ((R2 c d) S.<| ys))
             R4 b c d e-> Just (b, LSpine ((R3 c d e) S.<| ys))
@@ -95,23 +183,12 @@ ltail LEmpty = Nothing
 ltail (LConc x xs) = 
     case lview xs of
       Nothing -> Just (x,LEmpty)
-      Just ((_,y),ys) -> Just (x,LConc y ys)
+      Just (yv,ys) -> 
+          case yv of
+            Left (y,_) -> Just (x,LConc y ys)
+            Right (_,y) -> Just (x,LConc y ys)
 
 
-lpush :: (RSpine a, a) -> LSpine a -> LSpine a -- w -> x -> y : w:a, x:[a,b], y:[a,(b or b+1)]
-lpush x (LSpine xs) =
-    case S.viewl xs of
-      S.EmptyL -> LSpine ((R1 x) S.<| S.empty)
-      y S.:< ys -> 
-          case y of
-            R1 c -> LSpine ((R2 x c) S.<| ys)
-            R2 c d -> LSpine ((R3 x c d) S.<| ys)
-            R3 c d e -> LSpine ((R4 x c d e) S.<| ys)
-            R4 c d e (RSpine f,fv) -> 
-                let d' = toLspine d
-                    e' = toLspine e
-                    LSpine zs = lpush (RSpine ((R2 d' e') S.<| f),fv) (LSpine ys)
-                in LSpine ((R2 x c) S.<| zs)
 
 
 {-
@@ -159,18 +236,47 @@ lconsRspine x (LSpine xs) =
       S.EmptyL -> LSpine ((R1 x) S.<| S.empty)
       y S.:< ys -> 
           case y of
-            R1 z1 -> LSpine ((R2 x z1) S.<| ys)
-            R2 z1 z2 -> LSpine ((R3 x z1 z2) S.<| ys)
-            R3 z1 z2 z3 -> LSpine ((R4 x z1 z2 z3) S.<| ys)
+            R1 z1 -> LSpine ((R2 (Right x) z1) S.<| ys)
+            R2 z1 z2 -> LSpine ((R3 (Right x) z1 z2) S.<| ys)
+            R3 z1 z2 z3 -> LSpine ((R4 (Right x) z1 z2 z3) S.<| ys)
             R4 z1 z2 z3 z4 -> 
-               let LSpine zs = lconsRspine (bothRs z3 z4) (LSpine ys)
-               in LSpine ((R3 x z1 z2) S.<| zs)
+               let LSpine zs = lconsRspine (bothRs (forceRspine z3) z4) (LSpine ys)
+               in LSpine ((R3 (Right x) z1 (forceRspine z2)) S.<| zs)
 
 bothRs :: (RSpine a, a) -> (RSpine a, a) -> (RSpine a, a)
 bothRs x (RSpine ys, d) =
     let z = toLspine x
-    in (RSpine ((R1 z) S.<| ys),d)
+    in (RSpine ((L1 z) S.<| ys),d)
 
+
+restConcatMap f (R1 x) = f (Right x)
+restConcatMap f (R2 x y) = f x ++ f (Right y)
+restConcatMap f (R3 x y z) = f x ++ f y ++ f (Right z)
+restConcatMap f (R4 x y z w) = f x ++ f y ++ f z ++ f (Right w)
+
+lestConcatMap f (L1 x) = f (Left x)
+lestConcatMap f (L2 x y) = f (Left x) ++ f y
+lestConcatMap f (L3 x y z) = f (Left x) ++ f y ++ f z
+lestConcatMap f (L4 x y z w) = f (Left x) ++ f y ++ f z ++ f w
+
+
+toListLspine (LSpine xs) =
+    let restExtract = restConcatMap toListSpine
+        ys = concatMap restExtract $ stoList xs
+    in ys
+
+toListRspine (RSpine xs) =
+    let lestExtract = lestConcatMap toListSpine
+        ys = concatMap lestExtract $ stoList xs
+    in ys
+
+toListSpine (Left (d,x)) = d:(toListLspine x)
+toListSpine (Right (x,d)) = (toListRspine x)++[d]
+        
+stoList xs =
+    case S.viewl xs of
+      S.EmptyL -> []
+      y S.:< ys -> y:(stoList ys)
 
 toLConc REmpty = LEmpty
 toLConc (RConc a b) =
@@ -181,28 +287,6 @@ toList :: LConc a -> [a]
 toList LEmpty = []
 toList (LConc d xs) = d :(toListLspine xs)
 
-toListLspine (LSpine xs) =
-    let extract (r,d) = (toListRspine r) ++ ([d])
-        restExtract = restConcatMap extract
-        ys = concatMap restExtract $ stoList xs
-    in ys
-
-toListRspine (RSpine xs) =
-    let extract (d,l) = d:(toListLspine l)
-        restExtract = restConcatMap extract
-        ys = concatMap restExtract $ stoList xs
-    in ys
-
-restConcatMap f (R1 x) = f x
-restConcatMap f (R2 x y) = f x ++ f y
-restConcatMap f (R3 x y z) = f x ++ f y ++ f z
-restConcatMap f (R4 x y z w) = f x ++ f y ++ f z ++ f w
-        
-stoList xs =
-    case S.viewl xs of
-      S.EmptyL -> []
-      y S.:< ys -> y:(stoList ys)
-
 fromList [] = LEmpty
 fromList (x:xs) = lcons x (fromList xs)
 
@@ -210,7 +294,7 @@ bug1 n = and [[1..i] == (toList $ fromList [1..i]) | i <- [1..(max 68 n)]]
 test1 = bug1
 test2 n = and [(splitToList $ fromList [1..i]) | i <- [1..(max 68 n)]]
 splitToList x =
-    let (p,q) = lsplit x
+    let (p,q) = ldivide x
         q' = toLConc q
         small x = length (toList x) <= 1
     in if toList x == toList p ++ (toList q')
@@ -220,7 +304,7 @@ splitToList x =
 test3 n = and [(sizeDiff $ fromList [1..i]) | i <- [1..n]]
 sizeDiff LEmpty = True
 sizeDiff x =
-    let (p,q') = lsplit x
+    let (p,q') = ldivide x
         q = toLConc q'
         (r,s) = (toList p,toList q)
         (t,u) = (toInteger $ length r, toInteger $ length s)
@@ -236,7 +320,7 @@ mtoList = L.unfoldr ltail
 test4 n = and [[1..i] == (mtoList $ fromList [1..i]) | i <- [1..(max 68 n)]]
 test5 n = and [(splitToList' $ fromList [1..i]) | i <- [1..(max 68 n)]]
 splitToList' x =
-    let (p,q) = lsplit x
+    let (p,q) = ldivide x
         q' = toLConc q
         small x = length (toList x) <= 1
     in if mtoList x == mtoList p ++ (mtoList q')
@@ -275,53 +359,56 @@ lspineDepth n (LSpine d) =
                   Just m -> if depthClose [m,n]
                             then lspineDepth (n+1) (LSpine xs)
                             else Nothing
-            R2 (ps,_) (qs,_) ->
-                case (rspineDepth 0 ps, rspineDepth 0 qs) of
+            R2 ps (qs,_) ->
+                case (spineDepth 0 ps, rspineDepth 0 qs) of
                   (Just i, Just j) -> if depthClose [i,j,n]
                                       then lspineDepth (n+1) (LSpine xs)
                                       else Nothing
                   _ -> Nothing
-            R3 (ps,_) (qs,_) (rs,_) ->
-                case (rspineDepth 0 ps, rspineDepth 0 qs, rspineDepth 0 rs) of
+            R3 ps qs (rs,_) ->
+                case (spineDepth 0 ps, spineDepth 0 qs, rspineDepth 0 rs) of
                   (Just i, Just j, Just k) -> 
                       if depthClose [i,j,k,n]
                       then lspineDepth (n+1) (LSpine xs)
                       else Nothing
                   _ -> Nothing
-            R4 (ps,_) (qs,_) (rs,_) (ss,_) ->
-                case (rspineDepth 0 ps, rspineDepth 0 qs, rspineDepth 0 rs, rspineDepth 0 ss) of
+            R4 ps qs rs (ss,_) ->
+                case (spineDepth 0 ps, spineDepth 0 qs, spineDepth 0 rs, rspineDepth 0 ss) of
                   (Just i, Just j, Just k, Just l) -> 
                       if depthClose [i,j,k,l,n]
                       then lspineDepth (n+1) (LSpine xs)
                       else Nothing
                   _ -> Nothing
 
+spineDepth n (Left (_,x)) = lspineDepth n x
+spineDepth n (Right (x,_)) = rspineDepth n x
+
 rspineDepth n (RSpine d) =
     case S.viewr d of
       S.EmptyR -> Just 0
       xs S.:> x -> fmap (1+) $
           case x of 
-            R1 (_,ps) -> 
+            L1 (_,ps) -> 
                 case lspineDepth 0 ps of
                   Nothing -> Nothing
                   Just m -> if depthClose [n,m]
                             then rspineDepth (n+1) (RSpine xs)
                             else Nothing
-            R2 (_,ps) (_,qs) ->
-                case (lspineDepth 0 ps, lspineDepth 0 qs) of
+            L2 (_,ps) qs ->
+                case (lspineDepth 0 ps, spineDepth 0 qs) of
                   (Just i, Just j) -> if depthClose [i,j,n]
                                       then rspineDepth (n+1) (RSpine xs)
                                       else Nothing
                   _ -> Nothing
-            R3 (_,ps) (_,qs) (_,rs) ->
-                case (lspineDepth 0 ps, lspineDepth 0 qs, lspineDepth 0 rs) of
+            L3 (_,ps) qs rs ->
+                case (lspineDepth 0 ps, spineDepth 0 qs, spineDepth 0 rs) of
                   (Just i, Just j, Just k) -> 
                       if depthClose [i,j,k,n]
                       then rspineDepth (n+1) (RSpine xs)
                       else Nothing
                   _ -> Nothing
-            R4 (_,ps) (_,qs) (_,rs) (_,ss) ->
-                case (lspineDepth 0 ps, lspineDepth 0 qs, lspineDepth 0 rs, lspineDepth 0 ss) of
+            L4 (_,ps) qs rs ss ->
+                case (lspineDepth 0 ps, spineDepth 0 qs, spineDepth 0 rs, spineDepth 0 ss) of
                   (Just i, Just j, Just k, Just l) -> 
                       if depthClose [i,j,k,l,n]
                       then rspineDepth (n+1) (RSpine xs)
@@ -332,7 +419,7 @@ test6 n = and [sameDepth (fromList [1..i]) | i <- [1..n]]
 test7 n = and [pairDepth (fromList [1..i]) | i <- [1..n]]
 pairDepth LEmpty = True
 pairDepth x =
-    let (p,q) = lsplit x
+    let (p,q) = ldivide x
         q' = toLConc q
         small x = length (toList x) <= 1
     in case (lconcDepth p, lconcDepth q') of
