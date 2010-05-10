@@ -309,11 +309,12 @@ sizeDiff x =
         (r,s) = (toList p,toList q)
         (t,u) = (toInteger $ length r, toInteger $ length s)
         small x = x <= 1
-    in if (t+2)^3 > u && (u+2)^3 > t
+    in if (t+2)^2 > u && (u+2)^2 > t
        then 
            (small t || sizeDiff p) && 
            (small u || sizeDiff q)
        else error (show (t,u,p,q,x))
+
 
 mtoList = L.unfoldr ltail
 
@@ -444,3 +445,46 @@ test9 n = and [alltails sizeDiff (fromList [1..i]) | i <- [1..n]]
 bug3 = test9 50
 
 bug4 = test8 6
+
+test10 n = 
+    let (w,x,y,z) = L.unzip4 [(sizeDiffVal $ fromList [1..i]) | i <- [1..n]]
+    in ((sum w)/(fromIntegral n),
+        (sum x)/(fromIntegral n),
+        L.maximum y,
+        L.maximum z
+       )
+
+sizeDiffVal LEmpty = (1,1,(1,1),(1,1))
+sizeDiffVal x =
+    let (p,q') = ldivide x
+        q = toLConc q'
+        (r,s) = (toList p,toList q)
+        (t,u) = (fromIntegral $ length r, fromIntegral $ length s)
+        t' = max t u
+        u' = min t u
+    in (log (t'+2) / log (u'+2),
+            (t'+2)/(u'+2),
+        (log (t'+2) / log (u'+2),t+u),
+            ((t'+2)/(u'+2),t+u))
+
+joinSmall :: (a,LSpine a) -> (a,LSpine a) -> (a,LSpine a)
+joinSmall (b,LSpine c) d = (b,LSpine (c S.|> (R1 (toRspine d))))
+
+smallOne = (1,LSpine S.empty)
+
+joinBig :: (a,LSpine a) -> (a,LSpine a) -> (a,LSpine a) -> (a,LSpine a) -> (a,LSpine a) -> (a,LSpine a)
+joinBig (b,LSpine c) d e f g = (b,LSpine (c S.|> (R4 (Left d) (Left e) (Left f) (toRspine g))))
+
+verySmall 0 = smallOne
+verySmall n = 
+    let x = verySmall (n-1)
+    in joinSmall x x
+
+veryBig 0 = smallOne
+veryBig n = 
+    let x = veryBig (n-1)
+    in joinBig x x x x x
+
+llconc (a,b) = LConc a b
+
+test11 = sizeDiffVal $ llconc $ joinSmall (veryBig 8) (verySmall 8)
