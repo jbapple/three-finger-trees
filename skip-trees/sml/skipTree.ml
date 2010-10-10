@@ -39,24 +39,98 @@ end
 
 functor SKIPTREE (S:SPINE) = struct
 
-datatype 'a lspine = 
-	 Leaf of ('a * 'a list * 'a lspineCont)
-and 'a lspineCont =
-    Lont of ((('a spine) list * 'a rspine) option) S.spine
-and 'a rspine =
-    Reaf of ('a rspineCont * 'a list * 'a)
-and 'a rspineCont =
-    Ront of (('a lspine * ('a spine) list) option) S.spine
-and 'a spine = 
-    Left of 'a lspine
-  | Right of 'a rspine
+datatype 'a midTree = 
+	 Leaf of 'a list
+       | Node of (int * ('a midTree) list)
 
-datatype 'a skiptree = 
-	 Empty
-       | One of 'a
-       | Two of ('a * 'a)
-       | More of ('a lspine * ('a spine) list * 'a rspine)
 
+type 'a nodeCont = ('a midTree) list
+
+datatype 'a spine = Spine of ('a * 'a list * ('a nodeCont) S.spine)
+
+datatype 'a skipTree = 
+	 None
+       | One of 'a list
+       | Many of (int * 'a spine * ('a midTree) list * 'a spine * int)
+
+fun midSize (Leaf xs) = length xs
+  | midSize (Node (n,_)) = n
+
+fun rightToMid (Spine (x,xs,ss)) =
+    case S.eject ss 
+     of NONE => 
+	let val n = length xs
+	in Node (n+1,[Leaf (xs@[x])])
+	end
+      | SOME (ss,[]) => 
+	let val kid = rightToMid (Spine (x,xs,ss))
+	in Node (midSize kid, [kid])
+	end
+      | SOME (ss,zs) =>
+	let val lastKid = rightToMid (Spine (x,xs,ss))
+	    val kids = (rev zs) @ [lastKid]
+	    val n = foldl (Int.+) 0 (map midSize kids)
+	in Node (n,kids)
+	end
+	
+(*	
+
+
+fun pushLeftTreeH 0 s ls cs rs =
+    (case S.pop ls 
+      of NONE => S.push (SOME ([],s)) (S.push (S.empty
+       | SOME (NONE,ys) => S.push (SOME ([],s)) ys
+       | SOME (SOME (midl,lst),ys) => S.push (SOME (Right s::midl,lst)) ys)
+  | pushLeftTreeH n (s as (Reaf (Ront xs,heds,lst))) ys =
+    (case S.pop ys 
+      of NONE => S.push NONE (pushLeftTreeH (n-1) (Reaf (Ront (S.push NONE xs),heds,lst)) S.empty)
+       | SOME (NONE,ys) => S.push NONE (pushLeftTreeH (n-1) (Reaf (Ront (S.push NONE xs),heds,lst)) ys)
+       | SOME (SOME (midl,fin),ys) => 
+	 let val (p,q) = splitNode (Right s::midl)
+	 in case fin 
+	     of Reaf (Ront fxs, fhd, ftl) =>
+		S.push p (pushLeftTreeH (n-1) (Reaf (Ront (S.push q fxs),fhd,ftl)) ys)
+	 end)
+
+(* push a singlular value onto a left spine with the given height *)
+fun pushLeftH 0 x (Leaf (hed,tyl,ys)) = Leaf (x,hed::tyl,ys)
+  | pushLeftH n x (Leaf (hed,tyl,Lont ys)) = 
+    let val rst = More (1 + length tyl, map One (hed::tyl))  (*TODO: calculate length and map at same time*)
+    in Leaf (x,[],pushLeftTree (n-1) rst ys)
+
+
+	
+    
+
+(*
+fun splitLeaf xs =
+    let val n = Int.quot (length xs,2) (* TODO: not even, odds round down *)
+    in let val (p,q) = (List.take (xs,n), List.drop (xs,n))
+       in let val p = case p 
+		       of y::ys => (y,ys)
+	  in let val q = case rev q 
+			  of y::ys => (rev ys,y)
+	     in (p,q)
+	     end
+	  end			  
+       end 
+    end
+
+fun splitList xs =
+    let val n = Int.quot (length xs,2) (* TODO: not an even division: odds round down *)
+		(* TODO: even division is random enough? What is model of random tree? *)
+    in let val (p,q) = (List.take (xs,n), List.drop (xs,n))
+       in let val p = case p 
+		       of y::ys => (y,ys)
+	  in let val q = case rev q 
+			  of y::ys => (rev ys,y)
+	     in (p,q)
+	     end
+	  end			  
+       end 
+    end
+*)
+(*
 fun lextend (Leaf (hed, tyl, Lont xs)) = Leaf (hed, tyl, Lont (S.inject xs NONE))
 
 fun toLeft (Left x) = x
@@ -97,44 +171,8 @@ fun splitNode xs =
 	  end			  
        end 
     end
-
-fun pushLeftTreeH (~1) _ ys = ys
-  | pushLeftTreeH 0 s ys =
-    (case S.pop ys 
-      of NONE => S.push (SOME ([],s)) S.empty
-       | SOME (NONE,ys) => S.push (SOME ([],s)) ys
-       | SOME (SOME (midl,lst),ys) => S.push (SOME (Right s::midl,lst)) ys)
-  | pushLeftTreeH n (s as (Reaf (Ront xs,heds,lst))) ys =
-    (case S.pop ys 
-      of NONE => S.push NONE (pushLeftTreeH (n-1) (Reaf (Ront (S.push NONE xs),heds,lst)) S.empty)
-       | SOME (NONE,ys) => S.push NONE (pushLeftTreeH (n-1) (Reaf (Ront (S.push NONE xs),heds,lst)) ys)
-       | SOME (SOME (midl,fin),ys) => 
-	 let val (p,q) = splitNode (Right s::midl)
-	 in case fin 
-	     of Reaf (Ront fxs, fhd, ftl) =>
-		S.push p (pushLeftTreeH (n-1) (Reaf (Ront (S.push q fxs),fhd,ftl)) ys)
-	 end)
-	
-fun splitLeaf xs =
-    let val n = Int.quot (length xs,2) (* TODO: not even, odds round down *)
-    in let val (p,q) = (List.take (xs,n), List.drop (xs,n))
-       in let val p = case p 
-		       of y::ys => (y,ys)
-	  in let val q = case rev q 
-			  of y::ys => (rev ys,y)
-	     in (p,q)
-	     end
-	  end			  
-       end 
-    end
-    
-
-(* push a singlular value onto a left spine with the given height *)
-fun pushLeftH 0 x (Leaf (hed,tyl,Lont ys)) = Leaf (x,hed::tyl,Lont ys)
-  | pushLeftH n x (Leaf (hed,tyl,Lont ys)) = 
-    let val ((p,ps),(qs,q)) = splitLeaf (x::hed::tyl)
-    in Leaf (p,ps,Lont (pushLeftTreeH (n-1) (Reaf (Ront S.empty, qs, q)) ys))
-    end
+*)
+*)
 	    
 end
 
