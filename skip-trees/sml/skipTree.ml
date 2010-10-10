@@ -20,7 +20,7 @@ sig
     val join : 'a spine -> 'a spine -> 'a spine
 end
 
-structure ListSpine :> SPINE =
+structure ListSpine : SPINE =
 struct 
 type 'a spine = 'a list
 val empty = []
@@ -138,4 +138,5 @@ fun pushLeftH 0 x (Leaf (hed,tyl,Lont ys)) = Leaf (x,hed::tyl,Lont ys)
 	    
 end
 
-val () = print "foo"
+
+structure what = SKIPTREE(ListSpine);
