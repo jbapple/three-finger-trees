@@ -20,6 +20,7 @@ data LSpine a = LSpine (Deque (Rest (Spine a) (RSpine a, a))) deriving (Show)
 data RSpine a = RSpine (Deque (Lest (a, LSpine a) (Spine a))) deriving (Show)
 type Spine a = Either (a,LSpine a) (RSpine a, a)
 
+-- TODO: will rview force the root node? Perhaps make Rest and Lest smaller, and include the opposing spine in the constructor
 
 data LConc a = LEmpty
              | LConc a (LSpine a) deriving (Show)
@@ -65,71 +66,10 @@ ldivide x@(LConc d (LSpine xs)) =
             R2 zvs3 (RSpine zs4,v4) -> (LConc d (LSpine (ys S.|> (R1 (forceRspine zvs3)))), RConc (RSpine zs4) v4)
             R3 zvs2 zvs3 (RSpine zs4,v4) -> (LConc d (LSpine (ys S.|> (R1 (forceRspine zvs2)))), RConc (RSpine ((L1 (forceLspine zvs3)) S.<| zs4)) v4)
             R4 zvs1 zvs2 zvs3 (RSpine zs4,v4) -> (LConc d (LSpine (ys S.|> (R2 zvs1 (forceRspine zvs2)))), RConc (RSpine ((L1 (forceLspine zvs3)) S.<| zs4)) v4)
-{-
-            R3 zvs1 zvs2 (RSpine zs3,v3) -> 
-                case zvs1 of
-                  Right z1 ->
-                      case zvs2 of
-                        Right z2 -> (LConc d (LSpine (ys S.|> (R2 zvs1 z2))), RConc (RSpine zs3) v3)
-                        Left z2 -> (LConc d (LSpine (ys S.|> (R1 z1))), RConc (RSpine ((L1 z2) S.<| zs3)) v3)
-                  Left z1 -> (LConc d (LSpine ys), RConc (RSpine ((L2 z1 zvs2) S.<| zs3)) v3)
-            R3 zvs1 zvs2 zvs3 (RSpine zs4,v4) -> 
-                case zvs1 of
-                  Right z1 ->
-                      case zvs2 of
-                        Right z2 -> 
-                            case zvs3 of
-                              Right z3 -> (LConc d (LSpine (ys S.|> (R3 zvs1 zvs2 z3))), RConc (RSpine zs4) v4)
-                              Left z3 -> (LConc d (LSpine (ys S.|> (R2 zvs1 z2))), RConc (RSpine ((L1 z3) S.<| zs3)) v3)
-                        Left 
-                        Left z2 -> (LConc d (LSpine (ys S.|> (R1 z1))), RConc (RSpine ((L1 z2) S.<| zs3)) v3)
-                  Left z1 -> (LConc d (LSpine ys), RConc (RSpine ((L2 z1 zvs2) S.<| zs3)) v3)
--}
-{-
-lsplit :: LConc a -> (LConc a, RConc a)
-lsplit LEmpty = (LEmpty, REmpty)
-lsplit x@(LConc d (LSpine xs)) =
-    case S.viewr xs of
-      S.EmptyR -> (x, REmpty)
-      ys S.:> y ->
-          case y of
-            R1 (zs,v) -> (LConc d (LSpine ys), RConc zs v)
-            R2 zvs1 (RSpine zs2,v2) -> 
-                case zvs1 of
-                  Right z1 -> (LConc d (LSpine (ys S.|> (R1 z1))), RConc (RSpine zs2) v2)
-                  Left z1 -> (LConc d (LSpine ys), RConc (RSpine ((L1 z1) S.<| zs2)) v2)
-            R3 zvs1 zvs2 (RSpine zs3,v3) -> 
-                case zvs1 of
-                  Right z1 ->
-                      case zvs2 of
-                        Right z2 -> (LConc d (LSpine (ys S.|> (R2 zvs1 z2))), RConc (RSpine zs3) v3)
-                        Left z2 -> (LConc d (LSpine (ys S.|> (R1 z1))), RConc (RSpine ((L1 z2) S.<| zs3)) v3)
-                  Left z1 -> (LConc d (LSpine ys), RConc (RSpine ((L2 z1 zvs2) S.<| zs3)) v3)
-            R3 zvs1 zvs2 zvs3 (RSpine zs4,v4) -> 
-                case zvs1 of
-                  Right z1 ->
-                      case zvs2 of
-                        Right z2 -> 
-                            case zvs3 of
-                              Right z3 -> (LConc d (LSpine (ys S.|> (R3 zvs1 zvs2 z3))), RConc (RSpine zs4) v4)
-                              Left z3 -> (LConc d (LSpine (ys S.|> (R2 zvs1 z2))), RConc (RSpine ((L1 z3) S.<| zs3)) v3)
-                        Left 
-                        Left z2 -> (LConc d (LSpine (ys S.|> (R1 z1))), RConc (RSpine ((L1 z2) S.<| zs3)) v3)
-                  Left z1 -> (LConc d (LSpine ys), RConc (RSpine ((L2 z1 zvs2) S.<| zs3)) v3)
--}
 
-{-
-(LConc d (LSpine (ys S.|> (R2 zvs1 zvs2))), RConc zs3 v3)
-            R4 zvs1 zvs2 zvs3 (zs4,v4) -> (LConc d (LSpine (ys S.|> (R3 zvs1 zvs2 zvs3))), RConc zs4 v4)
--}
-
-{-
 approxSplitSameType x =
-    let (a,b) = lsplit x
+    let (a,b) = ldivide x
     in (a, toLConc b)
--}
-
-
 
 lpush :: Spine a -> LSpine a -> LSpine a -- w -> x -> y : w:a, x:[a,b], y:[a,(b or b+1)]
 lpush x (LSpine xs) =
@@ -171,13 +111,6 @@ lview (LSpine xs) = -- xs : [a,b+1]
             R3 b c d -> Just (b, LSpine ((R2 c d) S.<| ys))
             R4 b c d e-> Just (b, LSpine ((R3 c d e) S.<| ys))
 
-{-
-lSpineTail x = 
-    case lview x of
-      Nothing -> Nothing
-      Just (_,y) -> y
--}
-
 ltail :: LConc a -> Maybe (a,LConc a)
 ltail LEmpty = Nothing
 ltail (LConc x xs) = 
@@ -187,43 +120,6 @@ ltail (LConc x xs) =
           case yv of
             Left (y,_) -> Just (x,LConc y ys)
             Right (_,y) -> Just (x,LConc y ys)
-
-
-
-
-{-
-lsconc :: LSpine a -> LConc a
-lsconc (LSpine xs) =
-    case S.viewl xs of
-      S.EmptyL -> LEmpty
-      y S.:< ys -> 
-          case y of {-
-            R1 (ps,p) -> let (q,LSpine qs) = toLspine (ps,p)
-                         in LConc q (LSpine (qs S.>< ys)) -- TODO: bug here -}
-
-            R1 (ps,p) -> let (q,LSpine qs) = toLspine (ps,p)
-                         in case lsconc (LSpine ys) of
-                              LEmpty -> LConc q (LSpine qs)
-                              LConc r (LSpine rs) -> LConc q (LSpine ((qs S.|> (R1 (RSpine S.empty,r))) S.>< rs)) -- TODO: bug here
--}{-
-            R1 (ps,p) -> let (q,LSpine qs) = toLspine (ps,p)
-                         in case S.viewl ys of
-                              S.EmptyL -> LConc q (LSpine qs)
-                              (rr,rv) S.:< rs ->
-                                  case toListRspine r
-                                  case lsconc (LSpine rs) of
-                              LEmpty -> LConc q (LSpine qs)
-                              LConc r (LSpine rs) -> LConc q (LSpine ((qs S.|> (R1 (RSpine S.empty,r))) S.>< rs)) -- TODO: bug here
-            R2 (ps,p) qsq -> let (q,LSpine qs) = toLspine (ps,p)
-                             in LConc q (LSpine ((qs S.|> (R1 qsq)) S.>< ys))
-            R3 (ps,p) qsq rsr -> let (q,LSpine qs) = toLspine (ps,p)
-                                 in LConc q (LSpine ((qs S.|> (R2 qsq rsr)) S.>< ys))
-            R4 (ps,p) qsq rsr sss -> let (q,LSpine qs) = toLspine (ps,p)
-                                     in LConc q (LSpine ((qs S.|> (R3 qsq rsr sss)) S.>< ys))
-
-
-lspine
--}
 
 lcons :: a -> LConc a -> LConc a
 lcons x LEmpty = LConc x (LSpine S.empty)
@@ -248,7 +144,6 @@ bothRs x (RSpine ys, d) =
     let z = toLspine x
     in (RSpine ((L1 z) S.<| ys),d)
 
-
 restConcatMap f (R1 x) = f (Right x)
 restConcatMap f (R2 x y) = f x ++ f (Right y)
 restConcatMap f (R3 x y z) = f x ++ f y ++ f (Right z)
@@ -258,7 +153,6 @@ lestConcatMap f (L1 x) = f (Left x)
 lestConcatMap f (L2 x y) = f (Left x) ++ f y
 lestConcatMap f (L3 x y z) = f (Left x) ++ f y ++ f z
 lestConcatMap f (L4 x y z w) = f (Left x) ++ f y ++ f z ++ f w
-
 
 toListLspine (LSpine xs) =
     let restExtract = restConcatMap toListSpine
@@ -307,9 +201,9 @@ sizeDiff x =
     let (p,q') = ldivide x
         q = toLConc q'
         (r,s) = (toList p,toList q)
-        (t,u) = (toInteger $ length r, toInteger $ length s)
+        (t,u) = (fromIntegral $ length r, fromIntegral $ length s)
         small x = x <= 1
-    in if (t+2)^2 > u && (u+2)^2 > t
+    in if (t+2)**(5/2) > u && (u+2)**(5/2) > t
        then 
            (small t || sizeDiff p) && 
            (small u || sizeDiff q)

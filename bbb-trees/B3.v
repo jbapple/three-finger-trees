@@ -33,9 +33,204 @@ Variable digitS :
     down n < pow (S m).
 
 
+(*
 Inductive FullTree := 
   Leaf : A -> FullTree
 | Branch : NAT -> list (FullTree * A) -> FullTree.
+*)
+
+Inductive FullTreeMut := 
+  Leaf : A -> FullTreeMut
+| Branch : NAT -> ChildList (*list (FullTree * A)*) -> A -> FullTreeMut
+with ChildList :=
+  Nil : ChildList
+| Cons : FullTreeMut -> ChildList -> ChildList.
+
+Print FullTreeMut_ind.
+
+Scheme fullTreeMutInduct := Induction for FullTreeMut Sort Prop
+with childListInduct := Induction for ChildList Sort Prop.
+
+Print fullTreeMutInduct.
+
+
+forall 
+  (P : FullTree -> Prop) 
+  (Q : ChildList -> Prop),
+  (forall a : A, P (Leaf a)) ->
+       (forall (n : NAT) (c : ChildList), Q c -> P (Branch n c)) ->
+       Q Nil ->
+       (forall f2 : FullTreeMut,
+        P f2 -> forall (a : A) (c : ChildList), Q c -> Q (Cons f2 a c)) ->
+       forall f3 : FullTreeMut, P f3
+
+
+
+
+(*
+Section TreeInduct.
+  
+  Variables
+    (P: FullTree -> Prop)
+    (Q: list (FullTree * A) -> Prop)
+    (R: FullTree -> A -> list (FullTree * A) -> Prop)
+    (S: list (FullTree * A) -> NAT -> Prop)
+    (PLeaf: forall x, P (Leaf x))
+    (PBranch: forall n c, Q c -> S c n -> P (Branch n c))
+    (QNil: Q nil)
+    (QCons: forall t b c, P t -> R t b c -> Q c -> Q ((t,b)::c)).
+
+  Fixpoint treeInduct (x:FullTree) : P x :=
+    match x as t return P t with
+      | Leaf v => PLeaf v
+      | Branch n c =>
+        PBranch
+        ((fix help (d:list (FullTree * A)) : Q d :=
+          match d as e return Q e with
+            | nil => QNil
+            | ((v,b)::xs) => QCons (treeInduct v) _ (help xs)
+          end) c) _
+    end.
+
+End TreeInduct.
+*)
+
+(*
+Section TreeInduct.
+  
+  Variables
+    (P: FullTree -> option A -> Prop)
+    (Q: list (FullTree * A) -> option A -> Prop)
+    (PLeafNone: forall x, P (Leaf x) None)
+    (PLeafSome: forall x, P (Leaf x) (Some x))
+    (PBranchNone: forall n c, Q c None -> P (Branch n c) None)
+    (PBranchSome: forall n c b, Q c (Some b) -> P (Branch n c) (Some b))
+    (QNil: Q nil None)
+    (QOne: forall t b, Q ((t,b)::nil) (Some b))
+    (QCons: forall t b0 b1 c cs, P t (Some b0) -> Q (c::cs) b1 -> Q ((t,b0)::c::cs) b1).
+
+  Definition LastSome S T U (f:T -> option S) :=
+    fix help (ans:option S) (tyl:list (T*U)) {struct tyl} :=
+    match tyl with
+      | nil => ans
+      | (y,_)::ys => 
+        match f y with
+          | None => help ans ys
+          | Some newAns => help (Some newAns) ys
+        end
+    end.
+
+  Fixpoint rightMost (x:FullTree) : option A :=
+    match x with
+      | Leaf v => Some v
+      | Branch _ nil => None
+      | Branch _ ((t,_)::xs) => LastSome rightMost (rightMost t) xs
+    end.
+
+(*
+  Fixpoint rightMost (x:FullTree) : option A :=
+    match x with
+      | Leaf v => Some v
+      | Branch _ nil => None
+      | Branch _ ((t,_)::xs) =>
+        ((fix help ans tyl {struct tyl} :=
+          match tyl with
+            | nil => ans
+            | (y,_)::ys => 
+              match rightMost y with
+                | None => help ans ys
+                | Some newAns => help (Some newAns) ys
+              end
+          end) (rightMost t) xs)
+    end.
+    *)
+  
+
+  Fixpoint treeInduct (x:FullTree) : P x (rightMost x) :=
+    match x as t return P t with
+      | Leaf v => PLeafSome v
+      | Branch n zs => 
+        ((fix help ss :=
+          match ss with
+            | nil => PBranchNone QNil
+            | ((y,b)::nil) =>
+              match rightMost y with
+                | None => PBranchNone (treeInduct 
+              match LastSome rightMost (rightMost y) xs with
+                | None => PBranchNone QNil
+                | Some lst => PBranchSome (
+        match rightMost
+        PBranch _
+        ((fix help (d:list (FullTree * A)) : Q d :=
+          match d as e return Q e with
+            | nil => QNil
+            | ((v,b)::xs) => QCons _ (treeInduct v) (help xs)
+          end) c)
+    end.
+
+End TreeInduct.
+*)
+
+Section TreeInduct.
+  
+  Variables
+    (P: FullTree -> Prop)
+    (Q: list (FullTree * A) -> Prop)
+    (PLeaf: forall x, P (Leaf x))
+    (PBranch: forall n c, Q c -> P (Branch n c))
+    (QNil: Q nil)
+    (QCons: forall t b c, P t -> Q c -> Q ((t,b)::c)).
+
+  Fixpoint treeInduct (x:FullTree) : P x :=
+    match x as t return P t with
+      | Leaf v => PLeaf v
+      | Branch n c =>
+        PBranch _
+        ((fix help (d:list (FullTree * A)) : Q d :=
+          match d as e return Q e with
+            | nil => QNil
+            | ((v,b)::xs) => QCons _ (treeInduct v) (help xs)
+          end) c)
+    end.
+
+End TreeInduct.
+
+(*
+Section TreeInduct.
+  
+  Variables
+    (P: A -> FullTree -> A -> Prop)
+    (Q: A -> list (FullTree * A) -> A -> Prop)
+    (PLeaf: forall x, P x (Leaf x) x)
+    (PBranch: forall n a c b, Q a c b -> P a (Branch n c) b)
+    (QNil: forall a b, Q a nil b)
+    (QOne: forall a b t, P a t b -> Q a ((t,b)::nil) b)
+    (QCons: forall t a1 a2 a3 c cs, 
+      P a1 t a2 -> 
+      Q a2 (c::cs) a3 -> 
+      Q a1 ((t,a2)::c::cs) a3).
+
+  Fixpoint leftMost (x:FullTree) : A :=
+    match x with
+      | Leaf v => v
+      | Branch _ 
+
+  Fixpoint treeInduct (a:A) (x:FullTree) (b:A) : P a x b :=
+    match x as t return P t with
+      | Leaf v => PLeaf v
+      | Branch n c =>
+        PBranch _
+        ((fix help (d:list (FullTree * A)) : Q d :=
+          match d as e return Q e with
+            | nil => QNil
+            | ((v,b)::xs) => QCons _ (treeInduct v) (help xs)
+          end) c)
+    end.
+
+End TreeInduct.
+*)
+
+    
 
 (*
 Definition childReduce (S T:Type)
@@ -52,21 +247,69 @@ Definition childReduce (S T:Type)
   end.
 *)
 
-Definition childReduce (T:Type)
-  (reduce:FullTree -> A ->T) 
+Definition childReduce (S T U:Type)
+  (reduce:S -> U ->T) 
   (zero:T)
   (more:T -> T -> T)
    :=
-  fix help (xs:list (FullTree*A)) : T :=
+  fix help (xs:list (S*U)) : T :=
   match xs with
     | nil => zero
     | (y,b)::nil => reduce y b
     | (y,b)::ys => more (reduce y b) (help ys)
   end.
 
+Lemma childInduct :
+  forall S T U (P:list (S*U) -> T -> Prop) reduce zero more, 
+    P nil zero ->
+    (forall y b, P ((y,b)::nil) (reduce y b)) ->
+    (forall y b z zs res, P (z::zs) res -> P ((y,b)::z::zs) (more (reduce y b) res)) ->
+    forall xs, P xs (childReduce reduce zero more xs).
+Proof.
+  intros S T U P reduce zero more pzero preduce pmore.
+  induction xs.
+  simpl; assumption.
+  destruct xs.
+  simpl. destruct a. apply preduce.
+  simpl. destruct a.
+  apply pmore.
+  (* note how weak the IH is here *)
+  simpl in IHxs.
+  apply IHxs.
+Qed.
+
+(*
+Lemma childInductRefine :
+  forall S T U (P:list (S*U) -> T -> Prop) reduce zero more, 
+    P nil zero ->
+    (forall y b, P ((y,b)::nil) (reduce y b)) ->
+    (forall y b z zs res, P (z::zs) res -> P ((y,b)::z::zs) (more (reduce y b) res)) ->
+    forall xs, P xs (childReduce reduce zero more xs).
+Proof.
+  refine
+    (fun S T U (P:list (S*U) -> T -> Prop) reduce zero more 
+      pzero preduce pmore =>
+      fix help xs :=
+      match xs as xs' return P xs' (childReduce reduce zero more xs') with
+        | nil => pzero
+        | (y,b)::nil => preduce y b
+        | (y,b)::z::zs => pmore _ _ _ _ _ _
+      end).
+  (* 'help' looks much too strong here *)
+  unfold childReduce in help.
+  simpl.
+  pose (help (z :: zs)) as ans.
+  destruct z as [y1 b0].
+  apply ans.
+  Show Proof.
+  Print childInduct.
+  (*Guarded.*)
+Abort.
+*)
 
 Lemma childReduceDownSome :
-  forall T reduce zero (more:option T-> option T-> option T) xs,
+  forall S U T reduce zero (more:option T-> option T-> option T) 
+    (xs :list (S*U)),
     (forall p q,
       None <> more p q ->
       None <> p /\ None <> q) ->
@@ -98,6 +341,165 @@ Definition treeReduce (T:Type)
         in branch n (childReduce helper zero more c) b
   end.
 
+Require Import Program.
+
+Definition nominalSize x :=
+  match x with
+    | Leaf _ => up 1
+    | Branch m _ => m
+  end.
+
+Check childReduce.
+
+(*
+Lemma treeRedInduct : forall
+  (T:Type)
+  (leaf:A -> option A -> T)
+  (branch:NAT -> T -> option A -> T)
+  (zero:T)
+  (more:T -> T -> T)
+  (P:FullTree -> option A -> T -> Prop)
+  (Q:NAT -> list (FullTree*A) -> option A -> Prop)
+  (pleaf:forall v b, P (Leaf v) b (leaf v b))
+  (pbranch:forall n c b r, 
+    Q n c b -> 
+    P (Branch n c) b (branch n (childReduce r zero more c) b))
+  (qnil:forall n b, Q n nil b)
+  (qone:forall x b t, P x (Some b) t -> Q (nominalSize x) ((x,b)::nil) (Some b))
+  (qcons:forall x b c d y ys m r, P x (Some b) r -> Q m ((y,c)::ys) d -> 
+    Q (up ((down (nominalSize x)) + (down m))) ((x,b)::(y,c)::ys) d)
+  (x:FullTree) (b:option A), P x b (treeReduce leaf branch zero more x b).
+Proof.
+  intros.
+  pattern x.
+  eapply treeInduct
+  simpl. auto.
+  simpl.
+  intros.
+  apply pbranch.
+  apply H.
+  generalize dependent b.
+  generalize dependent x.
+  induction x; auto.
+  simpl. apply pleaf.
+  simpl.
+  intros.
+  eapply pbranch.
+  induction l.
+  apply qnil.
+  destruct l.
+  
+  apply qone.
+  match x with
+    | Leaf v => pleaf v b
+    | Branch n c => _
+  end.
+Next Obligation.
+  simpl in *.
+*)
+
+
+Program Definition treeInductP 
+  (T:Type)
+  (leaf:A -> option A -> T)
+  (branch:NAT -> T -> option A -> T)
+  (zero:T)
+  (more:T -> T -> T)
+  (P:FullTree -> option A -> T -> Prop)
+  (Q:NAT -> list (FullTree*A) -> option A -> Prop)
+  (pleaf:forall v b, P (Leaf v) b (leaf v b))
+  (pbranch:forall n c b r, 
+    Q n c b -> 
+    P (Branch n c) b (branch n (childReduce r zero more c) b))
+  (qnil:forall n b, Q n nil b)
+  (qone:forall x b t, P x (Some b) t -> Q (nominalSize x) ((x,b)::nil) (Some b))
+  (qcons:forall x b c d y ys m r, P x (Some b) r -> Q m ((y,c)::ys) d -> 
+    Q (up ((down (nominalSize x)) + (down m))) ((x,b)::(y,c)::ys) d) :=
+  fix help (x:FullTree) (b:option A) : P x b (treeReduce leaf branch zero more x b) :=
+  match x with
+    | Leaf v => pleaf v b
+    | Branch n c => 
+      match c with
+        | nil => pbranch _ _ _ _ (qnil _ _)
+        | (y,b)::ys => 
+          ((fix inner res zs :=
+            match zs with
+              | nil => res
+              | (u,d)::us =>
+                qcons (help _ _ _ u (Some d)) (inner _ _ us)
+            end) (help y (Some b)) ys)
+      end
+  end.
+Next Obligation.
+  admit.
+Next Obligation.
+  admit.
+Defined.
+Admitted.
+  simpl in *.
+  apply pbranch.
+  
+  
+      
+
+Lemma treeInduct :
+  forall T 
+    leaf branch (zero:T) more
+    (P:FullTree -> option A -> T -> Prop) Q,
+    (forall v b, P (Leaf v) b (leaf v b)) ->
+    (forall n c b r, Q n (childReduce r zero more c) b -> 
+      P (Branch n c) b (branch n (childReduce r zero more c) b)) ->
+    forall x b, P x b (treeReduce leaf branch zero more x b).
+Proof.
+  intros T leaf branch zero more P Q pleaf pbranch.
+  induction x.
+  simpl. apply pleaf.
+  simpl.
+    ->
+      (branch n 
+        (childReduce _ zero more c) b)
+    Q nil ->
+    (forall y b, Q ((y,b)::nil)) ->
+    (forall y b z zs res, Q c n b (z::zs) res -> P ((y,b)::z::zs) (more (reduce y b) res)) ->
+    (forall v b, P (Leaf v) b (leaf v b)) ->
+    (forall n c b, 
+      Q res
+      P (Branch n c) b 
+      (let helper x y := treeReduce leaf branch zero more x (Some y)
+        in branch n (childReduce helper zero more c) b)) ->
+    forall x b, P x b (treeReduce leaf branch zero more x b).
+Proof.
+  refine 
+    (fun T (P:FullTree -> option A -> T -> Prop) leaf branch (zero:T) more
+      pleaf pbranch =>
+      fix help (x:FullTree) (b:option A) : T :=
+      match x as x' return P x' b (treeReduce leaf branch zero more x' b) 
+        with
+        | Leaf v => pleaf v b
+        | Branch n c => 
+          let helper x y := help x (Some y)
+            in pbranch n (childReduce helper zero more c) b
+      end 
+      (T:Type)
+      
+      (leaf:A -> option A -> T)
+      (branch:NAT -> T -> option A -> T)
+      (zero:T)
+      (more:T -> T -> T) :=
+  fix help (x:FullTree) (b:option A) : T :=
+  match x with
+    | Leaf v => leaf v b
+    | Branch n c =>
+      let helper x y := help x (Some y)
+        in branch n (childReduce helper zero more c) b
+  end.
+
+    (forall y b, P ((y,b)::nil) (reduce y b)) ->
+    (forall y b z zs, P ((y,b)::z::zs) (more (reduce y b) (childReduce reduce zero more (z::zs)))) ->
+    forall xs, P xs (childReduce reduce zero more xs).
+Proof.
+*)
+
 Definition toList :=
   treeReduce 
   (fun x _ => cons x nil)
@@ -128,6 +530,17 @@ Definition children x :=
     | Branch _ xs => xs
   end.
 
+
+Lemma someReduceDownSome :
+  forall T leaf branch zero (more:T -> T -> option T) xs b,
+    None <> someReduce leaf branch zero more xs b ->
+    (forall x c,
+      In (x,c) (children xs) ->
+      None <> someReduce leaf branch zero more x (Some c)).
+Proof.
+  eapply treeInduct.
+
+
 Lemma someReduceDownSome :
   forall T leaf branch zero (more:T -> T -> option T) xs b,
     None <> someReduce leaf branch zero more xs b ->
@@ -149,7 +562,7 @@ Proof.
            end) l) as a.
   destruct a.
   pose childReduceDownSome as d.
-  pose (d _ (fun x y => someReduce leaf branch zero more x (Some y))
+  pose (d _ _ _ (fun x y => someReduce leaf branch zero more x (Some y))
   zero
           (fun p q : option T =>
            match p with
@@ -264,54 +677,6 @@ IDEA: induction principle specific to catamorphisms above
 
 Print childReduce.
 
-Lemma childInduct :
-  forall T (P:T->Prop) Q reduce zero more, 
-    P zero ->
-    (forall y b, Q y b -> P (reduce y b)) ->
-    (forall a b, P a -> P b -> P (more a b)) ->
-    forall xs, 
-      (forall x b,
-        In (x,b) xs ->
-        Q x b) -> 
-      P (childReduce reduce zero more xs).
-Proof.
-  refine
-    (fun T (P:T->Prop) Q reduce zero more 
-      pzero preduce pmore =>
-      fix help xs :=
-      match xs as xs' 
-        return (forall x b,
-          In (x,b) xs' ->
-          Q x b) -> 
-        P (childReduce reduce zero more xs') with
-        | nil => fun _ => pzero
-        | (y,b) :: nil => fun mems => preduce _ _ _
-        | (y,b) :: ys => fun mems => pmore _ _ (preduce _ _ _) _
-      end).
-  simpl in *.
-  eapply mems.
-  left; reflexivity.
-
-  eapply mems. simpl; auto.
-  destruct y1.
-  destruct l.
-  eapply preduce.
-  eapply mems.
-  simpl; auto.
-  eapply help.
-
-  remember (mems y b) as mm.
-  eapply preduce.
-  eapply mm.
-  left; auto.
-  simpl in *.
-  remember (mems y b) as mm.
-  eapply preduce.
-  eapply mm.
-  left; auto.
-  
-  Focus 2. simpl in *.
-  eapply pmore. 
 
 Definition childInduct
   (reduce:FullTree -> A -> Prop) 
@@ -753,12 +1118,6 @@ with childList xs :=
       treeList t ++ childList ts
   end.
 *)
-
-Definition nominalSize x :=
-  match x with
-    | Leaf _ => 1
-    | Branch m _ => down m
-  end.
 
 (*
 Scheme trees := Induction for FullTree Sort Prop

@@ -189,7 +189,7 @@ lspineDepth n (LSpine d) =
             R3 (ps,_) (qs,_) (rs,_) ->
                 case (rspineDepth 0 ps, rspineDepth 0 qs, rspineDepth 0 rs) of
                   (Just i, Just j, Just k) -> 
-                      if (i==j) && (j==n)
+                      if (i==j) && (j==n) && (k==j)
                       then lspineDepth (n+1) (LSpine xs)
                       else Nothing
                   _ -> Nothing
@@ -215,7 +215,7 @@ rspineDepth n (RSpine d) =
             R3 (_,ps) (_,qs) (_,rs) ->
                 case (lspineDepth 0 ps, lspineDepth 0 qs, lspineDepth 0 rs) of
                   (Just i, Just j, Just k) -> 
-                      if (i==j) && (j==n)
+                      if (i==j) && (j==n) && (k==j)
                       then rspineDepth (n+1) (RSpine xs)
                       else Nothing
                   _ -> Nothing
