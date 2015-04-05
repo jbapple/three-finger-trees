@@ -1,0 +1,1 @@
+Functional finger trees like those of Hinze & Paterson have two fingers, one at each end. Adding a finger at the root, like those described by Kaplan and Tarjan, allows certain O(1) operations that might otherwise be Ω(lg n), such as joining two trees of the same height or splitting a tree into two trees of roughly equal size.
